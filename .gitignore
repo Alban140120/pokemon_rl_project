@@ -7,3 +7,5 @@ __pycache__/
 checkpoints/
 *.pth
 .vscode/
+mgba/*.dll
+mgba/*.pyd
