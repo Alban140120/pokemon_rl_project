@@ -13,7 +13,7 @@ from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from pokemon_loader import load_gba_with_save, skip_to_game
-from rewards import ExplorationEmerald
+from rewards import SOURCES, ExplorationEmerald
 
 ROM = "roms/Pokemon - Emerald Version (USA, Europe).gba"
 SAV = "roms/start_save.sav"
@@ -28,13 +28,14 @@ def creer_env():
     return PyGBAEnv(gba, ExplorationEmerald(), frameskip=23, max_episode_steps=PAS_PAR_EPISODE)
 
 
-class CasesVisitees(BaseCallback):
-    """Ajoute à TensorBoard le nombre moyen de cases visitées par épisode."""
+class SourcesRecompense(BaseCallback):
+    """Ajoute à TensorBoard la moyenne par épisode de chaque source de récompense (cases, cartes, niveaux...)."""
 
     def _on_step(self) -> bool:
         for info in self.locals["infos"]:
             if "episode" in info:
-                self.logger.record_mean("rollout/cases_visitees", info["cases_visitees"])
+                for nom in SOURCES:
+                    self.logger.record_mean(f"rollout/{nom}", info[nom])
         return True
 
 
@@ -47,7 +48,7 @@ def main():
     args = parser.parse_args()
 
     mgba.log.silence()
-    env = VecMonitor(SubprocVecEnv([creer_env] * args.envs), info_keywords=("cases_visitees",))
+    env = VecMonitor(SubprocVecEnv([creer_env] * args.envs), info_keywords=SOURCES)
 
     model = PPO(
         "CnnPolicy",
@@ -65,7 +66,7 @@ def main():
     )
 
     debut = time.time()
-    model.learn(total_timesteps=args.pas, callback=[checkpoints, CasesVisitees()], tb_log_name=args.nom)
+    model.learn(total_timesteps=args.pas, callback=[checkpoints, SourcesRecompense()], tb_log_name=args.nom)
     duree = time.time() - debut
 
     model.save(f"checkpoints/{args.nom}_final")

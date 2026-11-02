@@ -39,9 +39,9 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 - **Actions** : 35 actions discrètes (5 choix de flèche × 7 choix de bouton, combinables).
 - **Un pas = 24 frames** (`frameskip=23`), ce qui est suffisant pour qu'une action ait un effet visible dans le jeu.
 - **Point de départ fixe** : on joue l'intro une fois, puis chaque épisode repart d'un **instantané de l'émulateur en mémoire** (`save_raw_state` / `load_raw_state`). Le reset est instantané au lieu de rejouer ~3000 frames d'intro.
-- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus un bonus de 0,01 par case nouvellement visitée. Toutes les règles envisagées, avec leur statut, sont dans [docs/regles_recompense.md](docs/regles_recompense.md).
+- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus nos règles (`rewards.py`) : +0,01 par case nouvelle, +1 par carte extérieure nouvelle (+0,2 en intérieur), +1 par niveau gagné, +2 par évolution, et des pénalités de santé (PV manquants, KO, statuts). Comme pygba, nos règles forment un score dont on récompense la variation : se soigner rapporte ce que les dégâts ont coûté. Toutes les règles envisagées, avec leur statut, sont dans [docs/regles_recompense.md](docs/regles_recompense.md).
 - **Parallélisme** : `SubprocVecEnv`, un émulateur par processus. Chaque processus charge sa ROM, prend son propre instantané de départ et a sa propre récompense (donc son propre ensemble de cases visitées). Le lot par mise à jour vaut `n_steps × envs` (512 × 8 = 4096 pas par défaut).
-- **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que le nombre de cases visitées, pour ne pas faire transiter ce gros dictionnaire entre processus. Ce nombre est aussi tracé dans TensorBoard (`rollout/cases_visitees`).
+- **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que ses compteurs (cases, cartes, niveaux, évolutions, KO, statuts, PV manquants), pour ne pas faire transiter ce gros dictionnaire entre processus. Chaque compteur est tracé dans TensorBoard (`rollout/<nom>`).
 
 ## Installation (Windows)
 
@@ -137,6 +137,19 @@ Les logs d'mGBA sont coupés dans `train.py` par `mgba.log.silence()` (dans chaq
 | Flags de script, dresseurs, expérience | 0 |
 
 L'agent a donc appris un vrai trajet (maison → Bourg-en-Vol → Route 101 → Rosyères → Route 103), et non une faille de la récompense. Limites : il **fuit les combats** (aucune expérience gagnée), et `approx_kl` reste élevé (0,15 à 0,3) : les mises à jour de PPO sont fortes, à surveiller si l'entraînement devient instable.
+
+### Lot 1 de règles (niveaux, cartes, santé), 512 pas par épisode
+
+| Mesure | Référence (exploration seule) | Lot 1 |
+|---|---|---|
+| Cases visitées en fin de run | 183 | 138 |
+| Carte la plus lointaine | Route 103 (après Rosyères) | Route 101 |
+| Niveaux gagnés, KO, PV perdus | 0 | 0 |
+
+Le lot 1 fait **moins bien** : l'agent atteint la Route 101 (+1 par carte extérieure) puis plafonne dès 120 000 pas, et il fuit toujours les combats, donc les règles de niveaux et de santé ne se déclenchent jamais. Deux pistes, à départager :
+
+- **PPO se fige trop tôt** : `approx_kl` reste entre 0,15 et 0,25 (il devrait être autour de 0,01 à 0,03). Les mises à jour sont trop fortes et la politique cesse d'explorer. Correctifs : taux d'apprentissage plus bas, bonus d'entropie (`ent_coef`).
+- **Une seule graine par run** : l'écart entre deux runs identiques n'est pas encore mesuré, il peut être du même ordre que l'écart observé ici.
 
 ## Problèmes rencontrés et enseignements
 

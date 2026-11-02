@@ -1,13 +1,52 @@
 from pygba import PokemonEmerald
 
+# Groupes de cartes de pokeemerald : 0 = villes et routes, 24 = grottes et bois.
+# Les autres groupes sont des intérieurs (maisons, centres, magasins, arènes...).
+GROUPES_EXTERIEURS = {0, 24}
+
+# Sources tracées dans TensorBoard (rollout/<nom>), valeur en fin d'épisode.
+SOURCES = ("cases_visitees", "cartes_ext", "cartes_int", "niveaux", "evolutions", "ko", "statuts", "pv")
+
 
 class ExplorationEmerald(PokemonEmerald):
-    """Récompense de base de pygba + bonus pour chaque nouvelle case visitée."""
+    """Récompense de base de pygba + règles maison (exploration, cartes, niveaux, santé...).
 
-    def __init__(self, exploration_reward: float = 0.01, **kwargs):
+    Comme pygba, nos règles forment un score et la récompense d'un pas est la variation de ce
+    score : perdre des PV coûte, se soigner rapporte autant. Voir docs/regles_recompense.md.
+    """
+
+    def __init__(
+        self,
+        exploration_reward: float = 0.01,
+        carte_ext_reward: float = 1.0,
+        carte_int_reward: float = 0.2,
+        niveau_reward: float = 1.0,
+        evolution_reward: float = 2.0,
+        pv_penalite: float = 0.5,
+        ko_penalite: float = 0.5,
+        statut_penalite: float = 0.1,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.exploration_reward = exploration_reward
+        self.carte_ext_reward = carte_ext_reward
+        self.carte_int_reward = carte_int_reward
+        self.niveau_reward = niveau_reward
+        self.evolution_reward = evolution_reward
+        self.pv_penalite = pv_penalite
+        self.ko_penalite = ko_penalite
+        self.statut_penalite = statut_penalite
+        self._init_suivi()
+
+    def _init_suivi(self):
         self._visited = set()
+        self._cartes = set()
+        self._niveau_initial = {}  # personality -> niveau à la première rencontre
+        self._niveau_max = {}
+        self._especes = {}  # personality -> espèce actuelle
+        self._evolutions = 0
+        self._sante = {"ko": 0, "statuts": 0, "pv": 0.0}
+        self._score_prec = 0.0
 
     def _tile_key(self):
         state = self._game_state
@@ -17,24 +56,73 @@ class ExplorationEmerald(PokemonEmerald):
             return None
         return (loc["mapGroup"], loc["mapNum"], pos["x"], pos["y"])
 
+    def _mettre_a_jour(self):
+        """Lit l'état du jeu (déjà rafraîchi par pygba) et met à jour les compteurs."""
+        state = self._game_state
+        key = self._tile_key()
+        if key is not None:
+            self._visited.add(key)
+            self._cartes.add(key[:2])
+
+        equipe = [p for p in state.get("party", []) if p.get("box")]
+        for p in equipe:
+            ident = p["box"]["personality"]
+            espece = p["box"]["substructs"][0]["species"]
+            self._niveau_initial.setdefault(ident, p["level"])
+            self._niveau_max[ident] = max(self._niveau_max.get(ident, 0), p["level"])
+            if ident in self._especes and self._especes[ident] != espece:
+                self._evolutions += 1
+            self._especes[ident] = espece
+
+        if equipe:
+            pv, pv_max = sum(p["hp"] for p in equipe), sum(p["maxHp"] for p in equipe)
+            self._sante = {
+                "ko": sum(p["hp"] == 0 for p in equipe),
+                "statuts": sum(p["status"] != 0 and p["hp"] > 0 for p in equipe),
+                "pv": 1 - pv / pv_max if pv_max else 0.0,  # part des PV manquants
+            }
+
+    def _composantes(self):
+        exterieures = sum(g in GROUPES_EXTERIEURS for g, _ in self._cartes)
+        return {
+            "cases_visitees": len(self._visited),
+            "cartes_ext": exterieures,
+            "cartes_int": len(self._cartes) - exterieures,
+            "niveaux": sum(self._niveau_max[i] - self._niveau_initial[i] for i in self._niveau_max),
+            "evolutions": self._evolutions,
+            **self._sante,
+        }
+
+    def _score(self):
+        c = self._composantes()
+        return (
+            c["cases_visitees"] * self.exploration_reward
+            + c["cartes_ext"] * self.carte_ext_reward
+            + c["cartes_int"] * self.carte_int_reward
+            + c["niveaux"] * self.niveau_reward
+            + c["evolutions"] * self.evolution_reward
+            - c["pv"] * self.pv_penalite
+            - c["ko"] * self.ko_penalite
+            - c["statuts"] * self.statut_penalite
+        )
+
     def reward(self, gba, observation):
         base = super().reward(gba, observation)
-        if observation is None:  # appel interne du reset : pas de bonus
+        # Appel interne du reset, ou écran noir de chargement (état du jeu peu fiable) : on attend.
+        if observation is None or observation.sum() < 1:
             return base
-        key = self._tile_key()
-        if key is not None and key not in self._visited:
-            self._visited.add(key)
-            return base + self.exploration_reward
-        return base
+        self._mettre_a_jour()
+        score = self._score()
+        bonus, self._score_prec = score - self._score_prec, score
+        return base + bonus
 
     def reset(self, gba):
         super().reset(gba)
-        self._visited = set()
-        key = self._tile_key()
-        if key is not None:
-            self._visited.add(key)  # la case de départ ne rapporte rien
+        self._init_suivi()
+        self._mettre_a_jour()
+        self._score_prec = self._score()  # score de départ : case, carte et équipe initiales ne rapportent rien
 
     def info(self, gba, observation):
         # pygba renvoie tout l'état du jeu (boîtes du PC comprises) : trop lourd à
         # faire transiter entre processus à chaque pas avec SubprocVecEnv.
-        return {"cases_visitees": len(self._visited)}
+        return self._composantes()

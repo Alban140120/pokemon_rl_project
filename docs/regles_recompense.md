@@ -55,15 +55,24 @@ normale (se soigner).
 |---|---|---|
 | Exploration : case nouvelle (clé mapGroup, mapNum, x, y) | +0,01 | ✅ `rewards.py` |
 
-## C. Lot 1 : faisable tout de suite
+## C. Lot 1 (dans `rewards.py`)
 
-| Règle | Statut | Remarque |
-|---|---|---|
-| Santé de l'équipe (PV bas, KO, soigner avant un KO total) | 🟢 | Un seul terme : pénalité sur les PV manquants et les KO. **Doit rester petit face à l'expérience**, sinon l'agent apprend à fuir tous les combats. |
-| Statut (poison, sommeil…) | 🟢 | Petite pénalité. |
-| Évolution | 🟢 | Petit bonus, sans risque. |
-| Niveau gagné | 🟢 | Déjà largement couvert par l'expérience : petit bonus au plus, sinon doublon. |
-| Portes franchies / nouvelles cartes | 🟢 | Bonus par nouvelle carte (mapGroup, mapNum), en plus des cases. |
+Comme pygba, ces règles forment un score : la récompense d'un pas est sa variation. Perdre des PV
+coûte, se soigner (Centre Pokémon, potion) rapporte autant.
+
+L'expérience de pygba rapporte très peu (racine cubique × 0,1 : 20 points d'expérience ≈ 0,27) et
+fuir ne coûte rien : le premier agent fuyait tous les combats. Le bonus de niveau est donc le
+moteur des combats, et il doit rester plus fort que les pénalités de santé.
+
+| Règle | Poids | Statut | Remarque |
+|---|---|---|---|
+| Niveau gagné | +1 par niveau | ✅ | Suivi par Pokémon (`personality`) : capturer ou déposer un Pokémon ne compte pas. |
+| Évolution | +2 | ✅ | Changement d'espèce d'un même Pokémon. |
+| Nouvelle carte extérieure (villes, routes : groupe 0 ; grottes, bois : groupe 24) | +1 | ✅ | En plus des +5 de pygba pour les 16 villes. |
+| Nouvelle carte intérieure (autres groupes) | +0,2 | ✅ | Faible, pour ne pas pousser à entrer dans chaque maison. |
+| PV manquants dans l'équipe | jusqu'à −0,5 | ✅ | Proportion des PV manquants sur toute l'équipe. |
+| KO | −0,5 par Pokémon | ✅ | |
+| Statut (poison, sommeil…) | −0,1 par Pokémon | ✅ | Hors Pokémon KO. |
 
 ## D. Plus tard
 
@@ -94,7 +103,6 @@ normale (se soigner).
 | Argent trop élevé | ⏸️ | Idem. |
 | Comparaison équipe vs PC | ⏸️ | Complexe pour un gain incertain. |
 | Tour de combat, étoiles de la carte de dresseur | ⏸️ | Contenu d'après la Ligue. |
-| Règle « F… » | ? | Coupée dans le résumé de la conversation d'origine. |
 
 ## Risques connus
 
@@ -107,6 +115,6 @@ normale (se soigner).
 ## Ordre de travail
 
 1. ~~Run de 200 000 pas avec la récompense actuelle~~ : fait. Récompense 0,62 → 6,52, Rosyères atteinte, flags de script stables (aucun basculement), mais l'agent fuit les combats.
-2. Allonger l'horizon (épisodes longs, puis points de départ avancés).
-3. Lot 1 (section C), une ou deux règles par run.
+2. Lot 1 (section C) à 512 pas par épisode, comparé au run de référence.
+3. Allonger l'horizon (épisodes de 2 048 pas, puis points de départ avancés).
 4. Lecture du sac, puis adresse de l'indicateur de combat.
