@@ -1,7 +1,7 @@
 import struct
 
 from pygba import PokemonEmerald
-from pygba.game_wrappers.utils.emerald_utils import Pokemon_format, parse_pokemon
+from pygba.game_wrappers.utils.emerald_utils import NUM_SPECIES, Pokemon_format, parse_pokemon
 
 # Groupes de cartes de pokeemerald : 0 = villes et routes, 24 = grottes et bois.
 # Les autres groupes sont des intérieurs (maisons, centres, magasins, arènes...).
@@ -90,6 +90,10 @@ class ExplorationEmerald(PokemonEmerald):
             self._cartes.add(key[:2])
 
         equipe = [p for p in state.get("party", []) if p.get("box")]
+        # Lecture pendant que le jeu réécrit l'équipe (évolution...) : espèce invalide, on ignore ce pas
+        # pour ne pas compter une fausse évolution.
+        if any(not 0 < p["box"]["substructs"][0]["species"] < NUM_SPECIES for p in equipe):
+            return
         for p in equipe:
             ident = p["box"]["personality"]
             espece = p["box"]["substructs"][0]["species"]
@@ -136,7 +140,11 @@ class ExplorationEmerald(PokemonEmerald):
         )
 
     def reward(self, gba, observation):
-        base = super().reward(gba, observation)
+        try:
+            base = super().reward(gba, observation)
+        except IndexError:
+            # Même cause côté pygba (espèce invalide -> plantage de l'émulateur et du run) : pas ignoré.
+            return 0.0
         # Appel interne du reset, ou écran noir de chargement (état du jeu peu fiable) : on attend.
         if observation is None or observation.sum() < 1:
             return base

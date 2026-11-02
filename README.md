@@ -155,6 +155,21 @@ Le lot 1 fait **moins bien** : l'agent atteint la Route 101 (+1 par carte extér
 
 **Avec la récompense des dégâts infligés** (+0,5 par adversaire entier, +1 par KO) : même plateau (3,13, Route 101), dégâts quasi nuls (0 à 0,08 adversaire par épisode). En 512 pas, l'agent rencontre trop peu de combats pour découvrir qu'attaquer rapporte. Piste suivante : épisodes de 2 048 pas.
 
+### Épisodes de 2 048 pas : l'agent combat
+
+Même récompense, épisodes 4 fois plus longs (`--episode 2048`), 331 776 pas en ~21 min :
+
+| Pas | 20 k | 120 k | 185 k | 250 k | 315 k | 332 k |
+|---|---|---|---|---|---|---|
+| Récompense | 2,92 | 4,90 | 5,68 | 8,51 | 13,3 | 14,7 |
+| KO adverses / épisode | 0 | 1 | 3,5 | 6,6 | 10,4 | 10,4 |
+| Niveaux gagnés / épisode | 0 | 0,5 | 1,1 | 2 | 2,75 | 2,6 |
+| KO subis / épisode | 0 | 0 | 0 | 0,1 | 0 | 0 |
+
+À partir de ~120 000 pas, l'agent **apprend à combattre** : une dizaine de Pokémon sauvages mis KO et près de 3 niveaux gagnés par épisode, presque sans perdre de Pokémon. La récompense monte encore à la fin : le run n'a pas convergé. L'exploration, elle, ne progresse plus (2 cartes extérieures) : l'agent reste combattre dans les hautes herbes.
+
+Le run s'est arrêté à 331 776 pas sur un plantage de pygba : une espèce invalide lue dans l'équipe (probablement pendant que le jeu la réécrit). Corrigé dans `rewards.py` : ces pas sont ignorés, ce qui évite aussi de compter une fausse évolution.
+
 ## Problèmes rencontrés et enseignements
 
 - **Version de la ROM.** Le wrapper pygba plantait sur la ROM française. Un diagnostic simple (lecture du code du jeu dans l'en-tête et d'une table connue en ROM) a confirmé que les adresses étaient celles de la version USA.
