@@ -9,3 +9,6 @@ checkpoints/
 .vscode/
 mgba/*.dll
 mgba/*.pyd
+sortie*.txt
+diag/
+runs/
