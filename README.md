@@ -6,7 +6,12 @@ Un agent entraîné **de zéro** par apprentissage par renforcement (PPO) à jou
 
 ## Objectif
 
-Obtenir un comportement cohérent (explorer, combattre, gagner des niveaux) à partir d'une fonction de récompense écrite à la main, sans aucune connaissance préalable du jeu. Finir le jeu n'est pas l'objectif.
+Aller **le plus loin possible** dans le jeu avec un agent qui part de zéro, guidé uniquement par une fonction de récompense écrite à la main.
+
+Par étapes :
+
+1. **Première étape** : démontrer un apprentissage net par rapport à un agent aléatoire (courbe TensorBoard, GIF avant/après).
+2. **Ensuite** : enrichir la récompense et allonger l'horizon (épisodes plus longs, points de départ plus avancés) pour progresser dans le scénario : combats, niveaux, badges.
 
 L'intérêt du projet est autant dans la conception de la récompense (*reward shaping*) que dans l'ingénierie qui l'entoure : compilation d'un émulateur depuis les sources, lecture de la RAM du jeu, environnement reproductible, entraînement sur GPU.
 
@@ -34,7 +39,7 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 - **Actions** : 35 actions discrètes (5 choix de flèche × 7 choix de bouton, combinables).
 - **Un pas = 24 frames** (`frameskip=23`), ce qui est suffisant pour qu'une action ait un effet visible dans le jeu.
 - **Point de départ fixe** : on joue l'intro une fois, puis chaque épisode repart d'un **instantané de l'émulateur en mémoire** (`save_raw_state` / `load_raw_state`). Le reset est instantané au lieu de rejouer ~3000 frames d'intro.
-- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus un bonus de 0,01 par case nouvellement visitée.
+- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus un bonus de 0,01 par case nouvellement visitée. Toutes les règles envisagées, avec leur statut, sont dans [docs/regles_recompense.md](docs/regles_recompense.md).
 - **Parallélisme** : `SubprocVecEnv`, un émulateur par processus. Chaque processus charge sa ROM, prend son propre instantané de départ et a sa propre récompense (donc son propre ensemble de cases visitées). Le lot par mise à jour vaut `n_steps × envs` (512 × 8 = 4096 pas par défaut).
 - **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que le nombre de cases visitées, pour ne pas faire transiter ce gros dictionnaire entre processus. Ce nombre est aussi tracé dans TensorBoard (`rollout/cases_visitees`).
 
@@ -135,8 +140,9 @@ _À compléter : résultat du run de 200 000 pas (courbe `rollout/ep_rew_mean` d
 - [x] Premier entraînement PPO (sans preuve d'apprentissage)
 - [x] Plusieurs environnements en parallèle (un émulateur par processus)
 - [ ] Run de 200 000 pas avec suivi TensorBoard
-- [ ] Récompenses plus riches : expérience, franchissement de portes, niveaux gagnés, KO et statuts
-- [ ] Lecture du sac et de l'état de combat (adresses mémoire à identifier)
+- [ ] Horizon plus long : épisodes de plusieurs milliers de pas, puis points de départ plus avancés
+- [ ] Récompenses plus riches, lot 1 : santé de l'équipe (PV, KO), statuts, évolutions, nouvelles cartes (voir [docs/regles_recompense.md](docs/regles_recompense.md))
+- [ ] Lecture du sac (déjà possible avec pygba) puis de l'état de combat (adresses mémoire à identifier)
 - [ ] GIF avant/après entraînement
 
 ## Remerciements
