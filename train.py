@@ -45,6 +45,9 @@ def main():
     parser.add_argument("--envs", type=int, default=8, help="nombre d'émulateurs en parallèle")
     parser.add_argument("--nom", default="ppo_exploration", help="nom du run (TensorBoard et checkpoints)")
     parser.add_argument("--checkpoint", type=int, default=10_000, help="pas entre deux checkpoints")
+    # Avec 3e-4 et sans entropie (défauts de SB3), approx_kl montait à 0,2 et la politique se figeait.
+    parser.add_argument("--lr", type=float, default=1e-4, help="taux d'apprentissage")
+    parser.add_argument("--entropie", type=float, default=0.01, help="bonus d'entropie (ent_coef)")
     args = parser.parse_args()
 
     mgba.log.silence()
@@ -56,6 +59,8 @@ def main():
         device="cuda",
         n_steps=PAS_PAR_EPISODE,  # lot par mise à jour : n_steps × envs
         batch_size=256,
+        learning_rate=args.lr,
+        ent_coef=args.entropie,
         tensorboard_log="runs",
         verbose=1,
     )

@@ -151,6 +151,8 @@ Le lot 1 fait **moins bien** : l'agent atteint la Route 101 (+1 par carte extér
 - **PPO se fige trop tôt** : `approx_kl` reste entre 0,15 et 0,25 (il devrait être autour de 0,01 à 0,03). Les mises à jour sont trop fortes et la politique cesse d'explorer. Correctifs : taux d'apprentissage plus bas, bonus d'entropie (`ent_coef`).
 - **Une seule graine par run** : l'écart entre deux runs identiques n'est pas encore mesuré, il peut être du même ordre que l'écart observé ici.
 
+**Relance avec un taux d'apprentissage de 1e-4 et un bonus d'entropie de 0,01** (nouveaux défauts de `train.py`) : `approx_kl` redescend à 0,02 à 0,07, mais le comportement est le même (récompense 3,05, Route 101, aucun combat gagné). Le blocage vient donc de la récompense : sur 512 pas, fuir est rentable, car un combat coûte des pas et des PV et ne rapporte presque rien avant plusieurs victoires. Piste suivante : récompenser les dégâts infligés à l'adversaire.
+
 ## Problèmes rencontrés et enseignements
 
 - **Version de la ROM.** Le wrapper pygba plantait sur la ROM française. Un diagnostic simple (lecture du code du jeu dans l'en-tête et d'une table connue en ROM) a confirmé que les adresses étaient celles de la version USA.
