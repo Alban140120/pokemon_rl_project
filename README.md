@@ -25,9 +25,8 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 |---|---|
 | `pokemon_loader.py` | Charge la ROM et la sauvegarde, puis passe l'intro jusqu'au point de départ |
 | `rewards.py` | Fonction de récompense : base de pygba + bonus d'exploration |
-| `train.py` | Entraînement PPO avec checkpoints et suivi TensorBoard |
-| `train_test.py` | Test court de l'entraînement (vérification du montage) |
-| `test_*.py` | Scripts de validation : état du jeu, instantanés, environnement, ligne de base aléatoire |
+| `train.py` | Entraînement PPO sur plusieurs émulateurs en parallèle, avec checkpoints et suivi TensorBoard |
+| `scripts/` | Scripts de validation et de diagnostic : état du jeu, instantanés, environnement, ligne de base aléatoire |
 
 ### Choix de conception
 
@@ -36,6 +35,8 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 - **Un pas = 24 frames** (`frameskip=23`), ce qui est suffisant pour qu'une action ait un effet visible dans le jeu.
 - **Point de départ fixe** : on joue l'intro une fois, puis chaque épisode repart d'un **instantané de l'émulateur en mémoire** (`save_raw_state` / `load_raw_state`). Le reset est instantané au lieu de rejouer ~3000 frames d'intro.
 - **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus un bonus de 0,01 par case nouvellement visitée.
+- **Parallélisme** : `SubprocVecEnv`, un émulateur par processus. Chaque processus charge sa ROM, prend son propre instantané de départ et a sa propre récompense (donc son propre ensemble de cases visitées). Le lot par mise à jour vaut `n_steps × envs` (512 × 8 = 4096 pas par défaut).
+- **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que le nombre de cases visitées, pour ne pas faire transiter ce gros dictionnaire entre processus. Ce nombre est aussi tracé dans TensorBoard (`rollout/cases_visitees`).
 
 ## Installation (Windows)
 
@@ -85,16 +86,22 @@ Ne pas commiter ces fichiers : `*.gba` et `*.sav` sont déjà dans le `.gitignor
 venv\Scripts\activate
 
 # Vérifier la ligne de base d'un agent aléatoire (~7 min)
-python test_random_baseline.py
+python -m scripts.test_random_baseline
 
-# Entraînement PPO (checkpoints dans checkpoints/, courbes dans runs/)
+# Test court du montage (~1 min) : checkpoints et TensorBoard
+python train.py --pas 8192 --envs 4 --checkpoint 4096 --nom test_court
+
+# Entraînement PPO : 200 000 pas, 8 émulateurs (checkpoints dans checkpoints/, courbes dans runs/)
 python train.py
+python train.py --envs 12 --nom essai_12   # options : --pas, --envs, --nom, --checkpoint
 
 # Suivre l'entraînement dans un second terminal
 tensorboard --logdir runs
 ```
 
-Les logs verbeux d'mGBA remplissent la console : pour garder une trace exploitable, rediriger la sortie (`python train.py > sortie.txt 2>&1`) et filtrer ensuite avec `Select-String`.
+Les scripts de `scripts/` se lancent **depuis la racine** avec `python -m scripts.<nom>` : les imports (`pokemon_loader`, `rewards`, `mgba`) et les chemins `roms/` et `diag/` sont relatifs à la racine.
+
+Les logs d'mGBA sont coupés dans `train.py` par `mgba.log.silence()` (dans chaque processus). Les anciens scripts de `scripts/` ne le font pas : rediriger leur sortie si besoin (`> sortie.txt 2>&1`).
 
 ## Résultats
 
@@ -102,7 +109,8 @@ Mesures sur un seul environnement, avec la récompense d'exploration :
 
 | Mesure | Valeur |
 |---|---|
-| Vitesse d'entraînement | ~58 pas/s (PPO sur GPU inclus) |
+| Vitesse d'entraînement, 1 environnement | ~58 pas/s (PPO sur GPU inclus) |
+| Vitesse d'entraînement, 4 / 8 / 12 environnements | ~115 / ~200 / ~270 pas/s (16 cœurs logiques) |
 | Agent **aléatoire**, 40 épisodes de 512 pas | récompense moyenne 0,609 ± 0,226, soit ~62 cases visitées |
 | PPO, 20 480 pas (~40 épisodes) | récompense moyenne finale 0,67 |
 
@@ -125,10 +133,10 @@ _À compléter : résultat du run de 200 000 pas (courbe `rollout/ep_rew_mean` d
 - [x] Environnement Gymnasium avec reset instantané
 - [x] Ligne de base aléatoire
 - [x] Premier entraînement PPO (sans preuve d'apprentissage)
+- [x] Plusieurs environnements en parallèle (un émulateur par processus)
 - [ ] Run de 200 000 pas avec suivi TensorBoard
 - [ ] Récompenses plus riches : expérience, franchissement de portes, niveaux gagnés, KO et statuts
 - [ ] Lecture du sac et de l'état de combat (adresses mémoire à identifier)
-- [ ] Plusieurs environnements en parallèle (un émulateur par processus)
 - [ ] GIF avant/après entraînement
 
 ## Remerciements

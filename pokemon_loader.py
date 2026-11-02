@@ -29,7 +29,7 @@ def load_gba_with_save(rom_path: str, save_path: str) -> PyGBA:
     else:
         raise RuntimeError("La sauvegarde n'a pas pu être chargée")
 
-        # Le buffer vidéo doit être branché AVANT le reset
+    # Le buffer vidéo doit être branché AVANT le reset
     screen = mgba.image.Image(*core.desired_video_dimensions())
     core.set_video_buffer(screen)
 

@@ -33,3 +33,8 @@ class ExplorationEmerald(PokemonEmerald):
         key = self._tile_key()
         if key is not None:
             self._visited.add(key)  # la case de départ ne rapporte rien
+
+    def info(self, gba, observation):
+        # pygba renvoie tout l'état du jeu (boîtes du PC comprises) : trop lourd à
+        # faire transiter entre processus à chaque pas avec SubprocVecEnv.
+        return {"cases_visitees": len(self._visited)}
