@@ -106,7 +106,7 @@ normale (se soigner).
 
 ## Ordre de travail
 
-1. Run de 200 000 pas avec la récompense actuelle : point de comparaison.
+1. ~~Run de 200 000 pas avec la récompense actuelle~~ : fait. Récompense 0,62 → 6,52, Rosyères atteinte, flags de script stables (aucun basculement), mais l'agent fuit les combats.
 2. Allonger l'horizon (épisodes longs, puis points de départ avancés).
 3. Lot 1 (section C), une ou deux règles par run.
 4. Lecture du sac, puis adresse de l'indicateur de combat.

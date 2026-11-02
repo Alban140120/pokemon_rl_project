@@ -2,7 +2,7 @@
 
 Un agent entraîné **de zéro** par apprentissage par renforcement (PPO) à jouer à Pokémon Émeraude (GBA), piloté depuis Python via l'émulateur mGBA, sur GPU.
 
-> **Statut : projet en cours.** L'infrastructure complète est en place et validée (émulation, lecture de la mémoire du jeu, environnement Gymnasium, entraînement PPO sur GPU). L'agent n'a pas encore démontré d'apprentissage : voir la section [Résultats](#résultats).
+> **Statut : projet en cours.** L'infrastructure complète est en place et validée (émulation, lecture de la mémoire du jeu, environnement Gymnasium, entraînement PPO sur GPU). Première étape atteinte : après 200 000 pas, l'agent sort de la maison, atteint Rosyères et la Route 103, là où l'agent aléatoire reste dans la maison (voir [Résultats](#résultats)).
 
 ## Objectif
 
@@ -31,7 +31,7 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 | `pokemon_loader.py` | Charge la ROM et la sauvegarde, puis passe l'intro jusqu'au point de départ |
 | `rewards.py` | Fonction de récompense : base de pygba + bonus d'exploration |
 | `train.py` | Entraînement PPO sur plusieurs émulateurs en parallèle, avec checkpoints et suivi TensorBoard |
-| `scripts/` | Scripts de validation et de diagnostic : état du jeu, instantanés, environnement, ligne de base aléatoire |
+| `scripts/` | Scripts de validation et de diagnostic : état du jeu, instantanés, environnement, ligne de base aléatoire, décomposition de la récompense, GIF avant/après |
 
 ### Choix de conception
 
@@ -110,18 +110,33 @@ Les logs d'mGBA sont coupés dans `train.py` par `mgba.log.silence()` (dans chaq
 
 ## Résultats
 
-Mesures sur un seul environnement, avec la récompense d'exploration :
+![Agent aléatoire et agent PPO après 200 000 pas, sur le même épisode de 512 pas](media/avant_apres.gif)
 
 | Mesure | Valeur |
 |---|---|
 | Vitesse d'entraînement, 1 environnement | ~58 pas/s (PPO sur GPU inclus) |
 | Vitesse d'entraînement, 4 / 8 / 12 environnements | ~115 / ~200 / ~270 pas/s (16 cœurs logiques) |
 | Agent **aléatoire**, 40 épisodes de 512 pas | récompense moyenne 0,609 ± 0,226, soit ~62 cases visitées |
-| PPO, 20 480 pas (~40 épisodes) | récompense moyenne finale 0,67 |
+| PPO, 20 480 pas, 1 environnement | récompense moyenne finale 0,67 (dans le bruit) |
+| **PPO, 200 000 pas, 8 environnements** (12,6 min) | récompense moyenne **0,62 → 6,52**, cases visitées **63 → 183** |
 
-**Lecture honnête de ces chiffres :** l'écart entre PPO (0,67) et la ligne de base aléatoire (0,61) est du même ordre que l'incertitude des mesures. À ce stade, rien ne permet d'affirmer que l'agent apprend. Un run de 200 000 pas est prévu pour trancher.
+**Courbe d'apprentissage** (`rollout/ep_rew_mean`, moyenne sur les derniers épisodes) :
 
-_À compléter : résultat du run de 200 000 pas (courbe `rollout/ep_rew_mean` de TensorBoard)._
+| Pas | 4 k | 40 k | 60 k | 100 k | 140 k | 160 k | 200 k |
+|---|---|---|---|---|---|---|---|
+| Récompense | 0,62 | 0,66 | 0,82 | 1,59 | 2,60 | 3,83 | 6,52 |
+| Cases visitées | 63 | 79 | 124 | 141 | 144 | 167 | 183 |
+
+**D'où vient la récompense ?** Décomposition sur 3 épisodes de l'agent final (`scripts/decomposer_recompense.py`) :
+
+| Source | Par épisode |
+|---|---|
+| Nouvelle ville (Rosyères) | +5 |
+| Exploration | ~1,7 (~170 cases) |
+| Pokémon sauvages vus | 0,2 à 0,4 |
+| Flags de script, dresseurs, expérience | 0 |
+
+L'agent a donc appris un vrai trajet (maison → Bourg-en-Vol → Route 101 → Rosyères → Route 103), et non une faille de la récompense. Limites : il **fuit les combats** (aucune expérience gagnée), et `approx_kl` reste élevé (0,15 à 0,3) : les mises à jour de PPO sont fortes, à surveiller si l'entraînement devient instable.
 
 ## Problèmes rencontrés et enseignements
 
@@ -139,11 +154,11 @@ _À compléter : résultat du run de 200 000 pas (courbe `rollout/ep_rew_mean` d
 - [x] Ligne de base aléatoire
 - [x] Premier entraînement PPO (sans preuve d'apprentissage)
 - [x] Plusieurs environnements en parallèle (un émulateur par processus)
-- [ ] Run de 200 000 pas avec suivi TensorBoard
+- [x] Run de 200 000 pas avec suivi TensorBoard : apprentissage net (Rosyères atteinte)
 - [ ] Horizon plus long : épisodes de plusieurs milliers de pas, puis points de départ plus avancés
 - [ ] Récompenses plus riches, lot 1 : santé de l'équipe (PV, KO), statuts, évolutions, nouvelles cartes (voir [docs/regles_recompense.md](docs/regles_recompense.md))
 - [ ] Lecture du sac (déjà possible avec pygba) puis de l'état de combat (adresses mémoire à identifier)
-- [ ] GIF avant/après entraînement
+- [x] GIF avant/après entraînement
 
 ## Remerciements
 
