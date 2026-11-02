@@ -19,7 +19,8 @@ la fois, et chaque ajout est comparé au run précédent : sinon, impossible de 
   de dresseurs, Pokédex (vus / capturés), argent, Pokémon du PC.
 - **Sac** : lisible avec `read_save_block_1(gba, parse_items=True)` (objets, objets rares, Balls,
   CT/CS, baies), mais pas lu par défaut.
-- **Manque** : l'indicateur « en combat » et tout l'état de combat. Adresses à chercher dans les
+- **Équipe adverse** : `gEnemyParty` à 0x02024744 (juste après la nôtre, même format). Vérifié sur des combats sauvages ; elle reste en mémoire après le combat.
+- **Manque** : l'indicateur « en combat » et le reste de l'état de combat (attaques, boosts, tour). Adresses à chercher dans les
   symboles de la décompilation [pokeemerald](https://github.com/pret/pokeemerald) (version USA).
 
 ## Prérequis : l'horizon
@@ -73,6 +74,8 @@ moteur des combats, et il doit rester plus fort que les pénalités de santé.
 | PV manquants dans l'équipe | jusqu'à −0,5 | ✅ | Proportion des PV manquants sur toute l'équipe. |
 | KO | −0,5 par Pokémon | ✅ | |
 | Statut (poison, sommeil…) | −0,1 par Pokémon | ✅ | Hors Pokémon KO. |
+| Dégâts infligés à un adversaire | +0,5 pour ses PV entiers, au prorata | ✅ | Signal immédiat en combat. Lu dans `gEnemyParty` (0x02024744, vérifié). Par adversaire (`personality`), on garde la perte maximale : s'il se soigne, rien n'est repris ni redonné. |
+| KO d'un adversaire | +1 | ✅ | |
 
 ## D. Plus tard
 

@@ -36,6 +36,8 @@ def composantes(wrapper, etat_depart, maison_depart):
         "cartes intérieures": m["cartes_int"] * wrapper.carte_int_reward,
         "niveaux": m["niveaux"] * wrapper.niveau_reward,
         "évolutions": m["evolutions"] * wrapper.evolution_reward,
+        "dégâts infligés": m["degats"] * wrapper.degats_reward,
+        "ko adverses": m["ko_adverses"] * wrapper.ko_adverse_reward,
         "pv manquants": -m["pv"] * wrapper.pv_penalite,
         "ko": -m["ko"] * wrapper.ko_penalite,
         "statuts": -m["statuts"] * wrapper.statut_penalite,

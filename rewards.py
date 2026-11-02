@@ -1,11 +1,22 @@
+import struct
+
 from pygba import PokemonEmerald
+from pygba.game_wrappers.utils.emerald_utils import Pokemon_format, parse_pokemon
 
 # Groupes de cartes de pokeemerald : 0 = villes et routes, 24 = grottes et bois.
 # Les autres groupes sont des intérieurs (maisons, centres, magasins, arènes...).
 GROUPES_EXTERIEURS = {0, 24}
 
+# Équipe adverse : juste après la nôtre en RAM (gPlayerParty + 6 × 100 octets), même format.
+# Vérifié sur des combats sauvages des Routes 101 à 103. Elle reste en mémoire après le combat.
+ADRESSE_EQUIPE_ADVERSE = 0x02024744
+TAILLE_POKEMON = struct.calcsize(Pokemon_format)
+
 # Sources tracées dans TensorBoard (rollout/<nom>), valeur en fin d'épisode.
-SOURCES = ("cases_visitees", "cartes_ext", "cartes_int", "niveaux", "evolutions", "ko", "statuts", "pv")
+SOURCES = (
+    "cases_visitees", "cartes_ext", "cartes_int", "niveaux", "evolutions",
+    "degats", "ko_adverses", "ko", "statuts", "pv",
+)
 
 
 class ExplorationEmerald(PokemonEmerald):
@@ -25,6 +36,8 @@ class ExplorationEmerald(PokemonEmerald):
         pv_penalite: float = 0.5,
         ko_penalite: float = 0.5,
         statut_penalite: float = 0.1,
+        degats_reward: float = 0.5,
+        ko_adverse_reward: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -36,6 +49,8 @@ class ExplorationEmerald(PokemonEmerald):
         self.pv_penalite = pv_penalite
         self.ko_penalite = ko_penalite
         self.statut_penalite = statut_penalite
+        self.degats_reward = degats_reward
+        self.ko_adverse_reward = ko_adverse_reward
         self._init_suivi()
 
     def _init_suivi(self):
@@ -45,6 +60,7 @@ class ExplorationEmerald(PokemonEmerald):
         self._niveau_max = {}
         self._especes = {}  # personality -> espèce actuelle
         self._evolutions = 0
+        self._degats = {}  # personality de l'adversaire -> part maximale de ses PV retirée
         self._sante = {"ko": 0, "statuts": 0, "pv": 0.0}
         self._score_prec = 0.0
 
@@ -56,8 +72,17 @@ class ExplorationEmerald(PokemonEmerald):
             return None
         return (loc["mapGroup"], loc["mapNum"], pos["x"], pos["y"])
 
-    def _mettre_a_jour(self):
+    def _lire_adversaires(self, gba):
+        for i in range(6):
+            p = parse_pokemon(gba.read_memory(ADRESSE_EQUIPE_ADVERSE + i * TAILLE_POKEMON, TAILLE_POKEMON))
+            if p["box"] and p["maxHp"] > 0 and p["hp"] <= p["maxHp"]:
+                ident = p["box"]["personality"]
+                perte = 1 - p["hp"] / p["maxHp"]
+                self._degats[ident] = max(self._degats.get(ident, 0.0), perte)
+
+    def _mettre_a_jour(self, gba):
         """Lit l'état du jeu (déjà rafraîchi par pygba) et met à jour les compteurs."""
+        self._lire_adversaires(gba)
         state = self._game_state
         key = self._tile_key()
         if key is not None:
@@ -90,6 +115,8 @@ class ExplorationEmerald(PokemonEmerald):
             "cartes_int": len(self._cartes) - exterieures,
             "niveaux": sum(self._niveau_max[i] - self._niveau_initial[i] for i in self._niveau_max),
             "evolutions": self._evolutions,
+            "degats": sum(self._degats.values()),  # en « Pokémon adverses entiers »
+            "ko_adverses": sum(d >= 1 for d in self._degats.values()),
             **self._sante,
         }
 
@@ -101,6 +128,8 @@ class ExplorationEmerald(PokemonEmerald):
             + c["cartes_int"] * self.carte_int_reward
             + c["niveaux"] * self.niveau_reward
             + c["evolutions"] * self.evolution_reward
+            + c["degats"] * self.degats_reward
+            + c["ko_adverses"] * self.ko_adverse_reward
             - c["pv"] * self.pv_penalite
             - c["ko"] * self.ko_penalite
             - c["statuts"] * self.statut_penalite
@@ -111,7 +140,7 @@ class ExplorationEmerald(PokemonEmerald):
         # Appel interne du reset, ou écran noir de chargement (état du jeu peu fiable) : on attend.
         if observation is None or observation.sum() < 1:
             return base
-        self._mettre_a_jour()
+        self._mettre_a_jour(gba)
         score = self._score()
         bonus, self._score_prec = score - self._score_prec, score
         return base + bonus
@@ -119,7 +148,7 @@ class ExplorationEmerald(PokemonEmerald):
     def reset(self, gba):
         super().reset(gba)
         self._init_suivi()
-        self._mettre_a_jour()
+        self._mettre_a_jour(gba)  # l'adversaire resté en mémoire au départ ne rapporte rien
         self._score_prec = self._score()  # score de départ : case, carte et équipe initiales ne rapportent rien
 
     def info(self, gba, observation):

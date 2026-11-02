@@ -39,9 +39,9 @@ ROM + sauvegarde ──► mGBA (bindings Python) ──► pygba ──► Gymn
 - **Actions** : 35 actions discrètes (5 choix de flèche × 7 choix de bouton, combinables).
 - **Un pas = 24 frames** (`frameskip=23`), ce qui est suffisant pour qu'une action ait un effet visible dans le jeu.
 - **Point de départ fixe** : on joue l'intro une fois, puis chaque épisode repart d'un **instantané de l'émulateur en mémoire** (`save_raw_state` / `load_raw_state`). Le reset est instantané au lieu de rejouer ~3000 frames d'intro.
-- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus nos règles (`rewards.py`) : +0,01 par case nouvelle, +1 par carte extérieure nouvelle (+0,2 en intérieur), +1 par niveau gagné, +2 par évolution, et des pénalités de santé (PV manquants, KO, statuts). Comme pygba, nos règles forment un score dont on récompense la variation : se soigner rapporte ce que les dégâts ont coûté. Toutes les règles envisagées, avec leur statut, sont dans [docs/regles_recompense.md](docs/regles_recompense.md).
+- **Récompense** : la récompense de base de pygba (badges, Pokédex, dresseurs battus, expérience, événements de scénario) plus nos règles (`rewards.py`) : +0,01 par case nouvelle, +1 par carte extérieure nouvelle (+0,2 en intérieur), +1 par niveau gagné, +2 par évolution, +0,5 par adversaire entièrement entamé (au prorata des dégâts) et +1 par KO adverse, et des pénalités de santé (PV manquants, KO, statuts). Comme pygba, nos règles forment un score dont on récompense la variation : se soigner rapporte ce que les dégâts ont coûté. Toutes les règles envisagées, avec leur statut, sont dans [docs/regles_recompense.md](docs/regles_recompense.md).
 - **Parallélisme** : `SubprocVecEnv`, un émulateur par processus. Chaque processus charge sa ROM, prend son propre instantané de départ et a sa propre récompense (donc son propre ensemble de cases visitées). Le lot par mise à jour vaut `n_steps × envs` (512 × 8 = 4096 pas par défaut).
-- **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que ses compteurs (cases, cartes, niveaux, évolutions, KO, statuts, PV manquants), pour ne pas faire transiter ce gros dictionnaire entre processus. Chaque compteur est tracé dans TensorBoard (`rollout/<nom>`).
+- **`info` allégé** : pygba renvoie tout l'état du jeu à chaque pas ; `ExplorationEmerald` ne renvoie que ses compteurs (cases, cartes, niveaux, évolutions, dégâts et KO adverses, KO, statuts, PV manquants), pour ne pas faire transiter ce gros dictionnaire entre processus. Chaque compteur est tracé dans TensorBoard (`rollout/<nom>`).
 
 ## Installation (Windows)
 
@@ -98,7 +98,7 @@ python train.py --pas 8192 --envs 4 --checkpoint 4096 --nom test_court
 
 # Entraînement PPO : 200 000 pas, 8 émulateurs (checkpoints dans checkpoints/, courbes dans runs/)
 python train.py
-python train.py --envs 12 --nom essai_12   # options : --pas, --envs, --nom, --checkpoint
+python train.py --episode 2048 --nom long   # options : --pas, --envs, --episode, --nom, --checkpoint, --lr, --entropie
 
 # Suivre l'entraînement dans un second terminal
 tensorboard --logdir runs
@@ -152,6 +152,8 @@ Le lot 1 fait **moins bien** : l'agent atteint la Route 101 (+1 par carte extér
 - **Une seule graine par run** : l'écart entre deux runs identiques n'est pas encore mesuré, il peut être du même ordre que l'écart observé ici.
 
 **Relance avec un taux d'apprentissage de 1e-4 et un bonus d'entropie de 0,01** (nouveaux défauts de `train.py`) : `approx_kl` redescend à 0,02 à 0,07, mais le comportement est le même (récompense 3,05, Route 101, aucun combat gagné). Le blocage vient donc de la récompense : sur 512 pas, fuir est rentable, car un combat coûte des pas et des PV et ne rapporte presque rien avant plusieurs victoires. Piste suivante : récompenser les dégâts infligés à l'adversaire.
+
+**Avec la récompense des dégâts infligés** (+0,5 par adversaire entier, +1 par KO) : même plateau (3,13, Route 101), dégâts quasi nuls (0 à 0,08 adversaire par épisode). En 512 pas, l'agent rencontre trop peu de combats pour découvrir qu'attaquer rapporte. Piste suivante : épisodes de 2 048 pas.
 
 ## Problèmes rencontrés et enseignements
 

@@ -5,6 +5,7 @@
 """
 import argparse
 import time
+from functools import partial
 
 import mgba.log
 from pygba import PyGBAEnv
@@ -18,14 +19,15 @@ from rewards import SOURCES, ExplorationEmerald
 ROM = "roms/Pokemon - Emerald Version (USA, Europe).gba"
 SAV = "roms/start_save.sav"
 PAS_PAR_EPISODE = 512
+N_STEPS = 512  # pas par environnement entre deux mises à jour (lot : N_STEPS × envs)
 
 
-def creer_env():
+def creer_env(pas_par_episode: int = PAS_PAR_EPISODE):
     """Appelée dans chaque processus : son émulateur, son instantané de départ, sa récompense."""
     mgba.log.silence()  # les logs d'mGBA noient la console
     gba = load_gba_with_save(ROM, SAV)
     skip_to_game(gba)  # l'instantané initial de l'environnement est pris ici
-    return PyGBAEnv(gba, ExplorationEmerald(), frameskip=23, max_episode_steps=PAS_PAR_EPISODE)
+    return PyGBAEnv(gba, ExplorationEmerald(), frameskip=23, max_episode_steps=pas_par_episode)
 
 
 class SourcesRecompense(BaseCallback):
@@ -44,6 +46,7 @@ def main():
     parser.add_argument("--pas", type=int, default=200_000, help="nombre total de pas d'entraînement")
     parser.add_argument("--envs", type=int, default=8, help="nombre d'émulateurs en parallèle")
     parser.add_argument("--nom", default="ppo_exploration", help="nom du run (TensorBoard et checkpoints)")
+    parser.add_argument("--episode", type=int, default=PAS_PAR_EPISODE, help="pas par épisode")
     parser.add_argument("--checkpoint", type=int, default=10_000, help="pas entre deux checkpoints")
     # Avec 3e-4 et sans entropie (défauts de SB3), approx_kl montait à 0,2 et la politique se figeait.
     parser.add_argument("--lr", type=float, default=1e-4, help="taux d'apprentissage")
@@ -51,13 +54,13 @@ def main():
     args = parser.parse_args()
 
     mgba.log.silence()
-    env = VecMonitor(SubprocVecEnv([creer_env] * args.envs), info_keywords=SOURCES)
+    env = VecMonitor(SubprocVecEnv([partial(creer_env, args.episode)] * args.envs), info_keywords=SOURCES)
 
     model = PPO(
         "CnnPolicy",
         env,
         device="cuda",
-        n_steps=PAS_PAR_EPISODE,  # lot par mise à jour : n_steps × envs
+        n_steps=N_STEPS,
         batch_size=256,
         learning_rate=args.lr,
         ent_coef=args.entropie,
