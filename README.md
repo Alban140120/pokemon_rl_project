@@ -2,7 +2,7 @@
 
 Un agent entraîné **de zéro** par apprentissage par renforcement (PPO) à jouer à Pokémon Émeraude (GBA), piloté depuis Python via l'émulateur mGBA, sur GPU.
 
-> **Statut : projet en cours.** L'infrastructure complète est en place et validée (émulation, lecture de la mémoire du jeu, environnement Gymnasium, entraînement PPO sur GPU). Première étape atteinte : après 200 000 pas, l'agent sort de la maison, atteint Rosyères et la Route 103, là où l'agent aléatoire reste dans la maison (voir [Résultats](#résultats)).
+> **Statut : projet en cours.** L'infrastructure complète est en place et validée (émulation, lecture de la mémoire du jeu, environnement Gymnasium, entraînement PPO sur GPU). Première étape atteinte : l'agent apprend à se déplacer (Rosyères atteinte après 200 000 pas) puis, avec des épisodes de 2 048 pas, à combattre (~15 Pokémon sauvages mis KO et 3 à 4 niveaux par épisode, sans perdre de Pokémon). Il n'explore pas encore au-delà de la Route 101 (voir [Résultats](#résultats)).
 
 ## Objectif
 
@@ -170,6 +170,23 @@ Même récompense, épisodes 4 fois plus longs (`--episode 2048`), 331 776 pas e
 
 Le run s'est arrêté à 331 776 pas sur un plantage de pygba : une espèce invalide lue dans l'équipe (probablement pendant que le jeu la réécrit). Corrigé dans `rewards.py` : ces pas sont ignorés, ce qui évite aussi de compter une fausse évolution.
 
+### Jusqu'à 1,5 million de pas
+
+![Agent aléatoire et agent PPO après 1,5 million de pas, épisodes de 2 048 pas](media/combat_2048.gif)
+
+Reprise du run précédent (`--reprendre`) jusqu'à 1 million de pas (40 min), puis 500 000 pas avec un bonus de +3 au lieu de +1 par nouvelle carte extérieure (`--carte-ext 3`, 30 min). Aucun plantage.
+
+| Pas | 330 k | 500 k | 700 k | 1 M | 1,5 M |
+|---|---|---|---|---|---|
+| Récompense | 14,7 | 26,1 | 29,9 | ~29 | 31,0 |
+| KO adverses / épisode | 10,4 | 13,2 | ~14 | ~14 | 13,1 |
+| Niveaux gagnés / épisode | 2,6 | 3,25 | ~3,4 | ~3,3 | 3,1 |
+| Cartes extérieures | 2 | 2 | 2 | 2 | 2 |
+
+Décomposition sur 3 épisodes de l'agent final (2 048 pas) : 14 à 17 KO adverses (+14 à +17), 7 à 9 adversaires entamés (+7 à +9), 3 à 4 niveaux (+3 à +4), exploration ~1,5, PV manquants −0,2 à −0,3, **aucun Pokémon perdu**.
+
+**Lecture :** le combat est appris et plafonne dès ~700 000 pas. En revanche l'agent reste sur la Route 101 : le bonus de +3 par route n'a rien changé, car une politique installée dans le combat ne découvre jamais la route suivante, et un bonus jamais vu n'apprend rien. Pistes : départs variés (instantanés pris plus loin dans le jeu), ou bonus d'exploration qui ne s'épuise pas avec le temps (cases nouvelles à l'échelle de tout l'entraînement plutôt que de l'épisode).
+
 ## Problèmes rencontrés et enseignements
 
 - **Version de la ROM.** Le wrapper pygba plantait sur la ROM française. Un diagnostic simple (lecture du code du jeu dans l'en-tête et d'une table connue en ROM) a confirmé que les adresses étaient celles de la version USA.
@@ -187,8 +204,10 @@ Le run s'est arrêté à 331 776 pas sur un plantage de pygba : une espèce inva
 - [x] Premier entraînement PPO (sans preuve d'apprentissage)
 - [x] Plusieurs environnements en parallèle (un émulateur par processus)
 - [x] Run de 200 000 pas avec suivi TensorBoard : apprentissage net (Rosyères atteinte)
-- [ ] Horizon plus long : épisodes de plusieurs milliers de pas, puis points de départ plus avancés
-- [ ] Récompenses plus riches, lot 1 : santé de l'équipe (PV, KO), statuts, évolutions, nouvelles cartes (voir [docs/regles_recompense.md](docs/regles_recompense.md))
+- [x] Épisodes de 2 048 pas : l'agent apprend à combattre
+- [x] Reprise depuis un checkpoint (`--reprendre`)
+- [ ] Combiner combat et exploration : points de départ plus avancés, ou bonus d'exploration global
+- [x] Récompenses plus riches, lot 1 : santé de l'équipe (PV, KO), statuts, évolutions, nouvelles cartes (voir [docs/regles_recompense.md](docs/regles_recompense.md))
 - [ ] Lecture du sac (déjà possible avec pygba) puis de l'état de combat (adresses mémoire à identifier)
 - [x] GIF avant/après entraînement
 

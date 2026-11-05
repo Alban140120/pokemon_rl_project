@@ -69,7 +69,7 @@ moteur des combats, et il doit rester plus fort que les pénalités de santé.
 |---|---|---|---|
 | Niveau gagné | +1 par niveau | ✅ | Suivi par Pokémon (`personality`) : capturer ou déposer un Pokémon ne compte pas. |
 | Évolution | +2 | ✅ | Changement d'espèce d'un même Pokémon. |
-| Nouvelle carte extérieure (villes, routes : groupe 0 ; grottes, bois : groupe 24) | +1 | ✅ | En plus des +5 de pygba pour les 16 villes. |
+| Nouvelle carte extérieure (villes, routes : groupe 0 ; grottes, bois : groupe 24) | +1 (`--carte-ext`) | ✅ | En plus des +5 de pygba pour les 16 villes. Passer à +3 n'a rien changé : un bonus jamais atteint n'apprend rien. |
 | Nouvelle carte intérieure (autres groupes) | +0,2 | ✅ | Faible, pour ne pas pousser à entrer dans chaque maison. |
 | PV manquants dans l'équipe | jusqu'à −0,5 | ✅ | Proportion des PV manquants sur toute l'équipe. |
 | KO | −0,5 par Pokémon | ✅ | |
@@ -119,5 +119,6 @@ moteur des combats, et il doit rester plus fort que les pénalités de santé.
 
 1. ~~Run de 200 000 pas avec la récompense actuelle~~ : fait. Récompense 0,62 → 6,52, Rosyères atteinte, flags de script stables (aucun basculement), mais l'agent fuit les combats.
 2. Lot 1 (section C) à 512 pas par épisode, comparé au run de référence.
-3. Allonger l'horizon (épisodes de 2 048 pas, puis points de départ avancés).
-4. Lecture du sac, puis adresse de l'indicateur de combat.
+3. ~~Épisodes de 2 048 pas~~ : fait, l'agent combat (~15 KO, 3 à 4 niveaux par épisode) mais reste sur la Route 101.
+4. Combiner combat et exploration : points de départ avancés, ou bonus d'exploration global à l'entraînement.
+5. Lecture du sac, puis adresse de l'indicateur de combat.
