@@ -2,6 +2,7 @@
 
     python train.py                       # run complet : 200 000 pas, 8 environnements
     python train.py --pas 8192 --envs 4   # test court du montage
+    python train.py --reprendre checkpoints/x_330000_steps.zip --pas 670000 --episode 2048 --nom x
 """
 import argparse
 import time
@@ -51,22 +52,30 @@ def main():
     # Avec 3e-4 et sans entropie (défauts de SB3), approx_kl montait à 0,2 et la politique se figeait.
     parser.add_argument("--lr", type=float, default=1e-4, help="taux d'apprentissage")
     parser.add_argument("--entropie", type=float, default=0.01, help="bonus d'entropie (ent_coef)")
+    parser.add_argument("--reprendre", help="checkpoint (.zip) à partir duquel continuer ; --pas = pas en plus")
     args = parser.parse_args()
 
     mgba.log.silence()
     env = VecMonitor(SubprocVecEnv([partial(creer_env, args.episode)] * args.envs), info_keywords=SOURCES)
 
-    model = PPO(
-        "CnnPolicy",
-        env,
-        device="cuda",
-        n_steps=N_STEPS,
-        batch_size=256,
-        learning_rate=args.lr,
-        ent_coef=args.entropie,
-        tensorboard_log="runs",
-        verbose=1,
-    )
+    if args.reprendre:
+        # Les poids et le compteur de pas viennent du checkpoint ; la récompense est celle du code actuel.
+        model = PPO.load(
+            args.reprendre, env=env, device="cuda", tensorboard_log="runs",
+            custom_objects={"learning_rate": args.lr, "ent_coef": args.entropie},
+        )
+    else:
+        model = PPO(
+            "CnnPolicy",
+            env,
+            device="cuda",
+            n_steps=N_STEPS,
+            batch_size=256,
+            learning_rate=args.lr,
+            ent_coef=args.entropie,
+            tensorboard_log="runs",
+            verbose=1,
+        )
     checkpoints = CheckpointCallback(
         save_freq=max(args.checkpoint // args.envs, 1),  # compté par environnement
         save_path="checkpoints",
@@ -74,12 +83,17 @@ def main():
     )
 
     debut = time.time()
-    model.learn(total_timesteps=args.pas, callback=[checkpoints, SourcesRecompense()], tb_log_name=args.nom)
+    model.learn(
+        total_timesteps=args.pas,
+        callback=[checkpoints, SourcesRecompense()],
+        tb_log_name=args.nom,
+        reset_num_timesteps=not args.reprendre,  # en reprise, la courbe continue où elle s'était arrêtée
+    )
     duree = time.time() - debut
 
     model.save(f"checkpoints/{args.nom}_final")
     env.close()
-    print(f">>> {model.num_timesteps} pas en {duree / 60:.1f} min ({model.num_timesteps / duree:.0f} pas/s)")
+    print(f">>> {args.pas} pas en {duree / 60:.1f} min ({args.pas / duree:.0f} pas/s), total {model.num_timesteps}")
     print(f">>> modèle final : checkpoints/{args.nom}_final.zip")
 
 
