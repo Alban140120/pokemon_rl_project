@@ -23,12 +23,12 @@ PAS_PAR_EPISODE = 512
 N_STEPS = 512  # pas par environnement entre deux mises à jour (lot : N_STEPS × envs)
 
 
-def creer_env(pas_par_episode: int = PAS_PAR_EPISODE):
+def creer_env(pas_par_episode: int = PAS_PAR_EPISODE, **poids):
     """Appelée dans chaque processus : son émulateur, son instantané de départ, sa récompense."""
     mgba.log.silence()  # les logs d'mGBA noient la console
     gba = load_gba_with_save(ROM, SAV)
     skip_to_game(gba)  # l'instantané initial de l'environnement est pris ici
-    return PyGBAEnv(gba, ExplorationEmerald(), frameskip=23, max_episode_steps=pas_par_episode)
+    return PyGBAEnv(gba, ExplorationEmerald(**poids), frameskip=23, max_episode_steps=pas_par_episode)
 
 
 class SourcesRecompense(BaseCallback):
@@ -52,11 +52,12 @@ def main():
     # Avec 3e-4 et sans entropie (défauts de SB3), approx_kl montait à 0,2 et la politique se figeait.
     parser.add_argument("--lr", type=float, default=1e-4, help="taux d'apprentissage")
     parser.add_argument("--entropie", type=float, default=0.01, help="bonus d'entropie (ent_coef)")
+    parser.add_argument("--carte-ext", type=float, default=1.0, help="bonus par nouvelle carte extérieure (route, ville)")
     parser.add_argument("--reprendre", help="checkpoint (.zip) à partir duquel continuer ; --pas = pas en plus")
     args = parser.parse_args()
 
     mgba.log.silence()
-    env = VecMonitor(SubprocVecEnv([partial(creer_env, args.episode)] * args.envs), info_keywords=SOURCES)
+    env = VecMonitor(SubprocVecEnv([partial(creer_env, args.episode, carte_ext_reward=args.carte_ext)] * args.envs), info_keywords=SOURCES)
 
     if args.reprendre:
         # Les poids et le compteur de pas viennent du checkpoint ; la récompense est celle du code actuel.

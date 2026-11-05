@@ -2,6 +2,7 @@
 
     python -m scripts.decomposer_recompense checkpoints/ppo_exploration_200k_final.zip
     python -m scripts.decomposer_recompense aleatoire     # agent aléatoire
+    python -m scripts.decomposer_recompense checkpoints/x_final.zip 2048   # épisodes de 2 048 pas
 """
 import sys
 from collections import Counter
@@ -46,7 +47,7 @@ def composantes(wrapper, etat_depart, maison_depart):
 
 def main():
     mgba.log.silence()
-    env = creer_env()
+    env = creer_env(int(sys.argv[2]) if len(sys.argv) > 2 else 512)
     if sys.argv[1] == "aleatoire":
         choisir = lambda obs: env.action_space.sample()  # noqa: E731
     else:
