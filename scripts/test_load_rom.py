@@ -16,6 +16,8 @@ for i in range(300):
 # Convertit en image Pillow, corrige le mode couleur, puis sauvegarde
 pil_image = screen.to_pil()
 pil_image = pil_image.convert("RGB")
-pil_image.save("test_screenshot.png")
+from pathlib import Path
+Path("diag").mkdir(exist_ok=True)
+pil_image.save("diag/test_screenshot.png")
 
-print("Capture d'écran réussie ! Regarde test_screenshot.png")
+print("Capture d'écran réussie ! Regarde diag/test_screenshot.png")
